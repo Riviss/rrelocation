@@ -57,6 +57,26 @@ conda activate rreloc
 pip install -r requirements.txt
 ```
 
+## Running the Julia relocation script
+
+The relocation routine itself is implemented in Julia using the
+`GrowClust3D.jl` package.  You will need a working Julia installation
+and the package available in your Julia environment.  A typical setup
+looks like:
+
+```bash
+# install Julia packages (from the Julia REPL)
+import Pkg; Pkg.add("GrowClust3D")
+
+# run GrowClust with the provided control file
+julia scripts/run_growclust3D.jl dawson.nllgrid3D.inp
+```
+
+Edit the `dawson.nllgrid3D.inp` control file or supply your own path if
+needed.  When running batch relocations `scripts/run_relocation.sh`
+will execute the above command for each cluster directory.
+
+
 ## License
 
 This project is licensed under the terms of the MIT License.  See [LICENSE](LICENSE) for details.
