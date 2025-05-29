@@ -14,7 +14,7 @@ docs/       Additional documentation
 Key Python scripts now live in `src/`:
 
 - `create_cc_and_origins.py` – cluster catalog origins with DBSCAN and generate cross‑correlation tasks.
-- `create_growclust_filles_after_cc.py` – build `evlist.txt`, `stlist.txt` and `xcordata.txt` files for GrowClust.
+- `create_growclust_files_after_cc.py` – build `evlist.txt`, `stlist.txt` and `xcordata.txt` files for GrowClust.
 - `create_relocation_files.py` – chunked cross‑correlation workflow that limits memory use.
 
 The `scripts/` folder contains the Julia relocation script (`run_growclust3D.jl` and its multi‑process variant) and a helper shell script `run_relocation.sh` which loops over cluster directories.
@@ -29,7 +29,7 @@ The `scripts/` folder contains the Julia relocation script (`run_growclust3D.jl`
 
 2. Create GrowClust input files for each cluster:
    ```bash
-   python src/create_growclust_filles_after_cc.py
+   python src/create_growclust_files_after_cc.py
    ```
 
 3. Run the relocation for all clusters:
