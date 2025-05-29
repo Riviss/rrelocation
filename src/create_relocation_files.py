@@ -25,11 +25,19 @@ from sklearn.cluster import DBSCAN
 
 # Centralised path configuration
 from config import (
+    USE_DATABASE,
+    DB_HOST,
+    DB_USER,
+    DB_PASSWORD,
+    DB_NAME,
+    ORIGINS_TABLE,
+    ARRIVALS_TABLE,
     ORIGINS_PATH,
     ARRIVALS_PATH,
     STATIONS_PATH,
     WAVEFORM_ROOT as WF_PATH,
     XCORR_OUTDIR,
+    get_db_engine,
 )
 
 EARTH_RADIUS_KM = 6371.0
@@ -86,11 +94,17 @@ def cluster_events_dbscan(df_origins, time_window_days=7, dist_km=2, min_samples
 
 def load_and_cluster_dbscan():
     """
-    Load CSV files, preprocess, and DBSCAN cluster the origin data.
+    Load origin and arrival information from either CSV files or the
+    configured MySQL database and perform DBSCAN clustering.
     Returns (origin_df, arrival_df).
     """
-    origin = pd.read_csv(ORIGINS_PATH)
-    arrival = pd.read_csv(ARRIVALS_PATH)
+    if USE_DATABASE:
+        engine = get_db_engine()
+        origin = pd.read_sql(f"SELECT * FROM {ORIGINS_TABLE}", engine)
+        arrival = pd.read_sql(f"SELECT * FROM {ARRIVALS_TABLE}", engine)
+    else:
+        origin = pd.read_csv(ORIGINS_PATH)
+        arrival = pd.read_csv(ARRIVALS_PATH)
     
     # Rename columns to standard
     origin.rename(columns={

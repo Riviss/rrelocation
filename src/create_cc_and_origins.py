@@ -36,11 +36,19 @@ from sklearn.cluster import DBSCAN
 
 # Centralised path configuration
 from .config import (
+    USE_DATABASE,
+    DB_HOST,
+    DB_USER,
+    DB_PASSWORD,
+    DB_NAME,
+    ORIGINS_TABLE,
+    ARRIVALS_TABLE,
     ORIGINS_PATH,
     ARRIVALS_PATH,
     STATIONS_PATH,
     WAVEFORM_ROOT,
     XCORR_OUTDIR,
+    get_db_engine,
 )
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -88,12 +96,19 @@ def approximate_xy(lat, lon, lat0=None, lon0=None):
 
 def load_and_cluster_dbscan():
     """
-    1) Load 'origins.csv' & 'arrivals.csv'
+    1) Load origin and arrival information
+       either from CSV files or from the configured MySQL database.
     2) DBSCAN on origins => cluster_id
     3) Return df_origin, df_arrival (not merged yet)
     """
-    df_origin  = pd.read_csv(ORIGINS_PATH)
-    df_arrival = pd.read_csv(ARRIVALS_PATH)
+
+    if USE_DATABASE:
+        engine = get_db_engine()
+        df_origin = pd.read_sql(f"SELECT * FROM {ORIGINS_TABLE}", engine)
+        df_arrival = pd.read_sql(f"SELECT * FROM {ARRIVALS_TABLE}", engine)
+    else:
+        df_origin = pd.read_csv(ORIGINS_PATH)
+        df_arrival = pd.read_csv(ARRIVALS_PATH)
 
     # rename origin columns to standard
     df_origin.rename(columns={

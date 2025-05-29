@@ -34,6 +34,12 @@ from config import (
     GROWCLUST_INP,
     JULIA_SCRIPT,
     XCORR_OUTDIR,
+    USE_DATABASE,
+    DB_HOST,
+    DB_USER,
+    DB_PASSWORD,
+    DB_NAME,
+    get_db_engine,
 )
 
 from create_cc_and_origins import load_and_cluster_dbscan
@@ -43,20 +49,18 @@ from create_cc_and_origins import load_and_cluster_dbscan
 # Database helpers
 ###############################################################################
 
-def get_engine(
-    host: str = "localhost",
-    user: str = "root",
-    password: str | None = None,
-    database: str = "earthquakes",
-) -> "Engine":
-    """Return a SQLAlchemy engine."""
+def get_engine() -> "Engine":
+    """Return a SQLAlchemy engine using config credentials."""
 
-    if password:
-        auth = f"{user}:{password}"
+    if USE_DATABASE:
+        return get_db_engine()
+    # Fallback for backwards compatibility
+    if DB_PASSWORD:
+        auth = f"{DB_USER}:{DB_PASSWORD}"
     else:
-        auth = user
-    url = f"mysql+mysqlconnector://{auth}@{host}/{database}"
-    return create_engine(url)
+        auth = DB_USER
+        url = f"mysql+mysqlconnector://{auth}@{DB_HOST}/{DB_NAME}"
+        return create_engine(url)
 
 
 def ensure_tables(engine) -> None:
@@ -66,11 +70,12 @@ def ensure_tables(engine) -> None:
             text(
                 """
                 CREATE TABLE IF NOT EXISTS event_clusters (
-                    event_id     VARCHAR(64) PRIMARY KEY,
+                    master_id    VARCHAR(64) PRIMARY KEY,
                     cluster_id   INT,
                     lat          DOUBLE,
                     lon          DOUBLE,
                     depth        DOUBLE,
+                    mag          DOUBLE,
                     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                                      ON UPDATE CURRENT_TIMESTAMP
                 )
@@ -81,7 +86,7 @@ def ensure_tables(engine) -> None:
             text(
                 """
                 CREATE TABLE IF NOT EXISTS relocated_events (
-                    event_id   INT PRIMARY KEY,
+                    master_id  INT PRIMARY KEY,
                     datetime   DATETIME,
                     lat        DOUBLE,
                     lon        DOUBLE,
@@ -103,7 +108,7 @@ def fetch_previous_clusters(engine) -> Dict[str, Dict[str, float]]:
         rows = conn.execute(text("SELECT * FROM event_clusters")).mappings().all()
     prev: Dict[str, Dict[str, float]] = {}
     for r in rows:
-        prev[str(r["event_id"])] = {
+        prev[str(r["master_id"])] = {
             "cluster_id": int(r["cluster_id"]),
             "lat": float(r["lat"]),
             "lon": float(r["lon"]),
@@ -114,19 +119,20 @@ def fetch_previous_clusters(engine) -> Dict[str, Dict[str, float]]:
 
 def update_event_clusters(engine, df: pd.DataFrame) -> None:
     q = text(
-        "REPLACE INTO event_clusters (event_id, cluster_id, lat, lon, depth) "
-        "VALUES (:event_id, :cluster_id, :lat, :lon, :depth)"
+        "REPLACE INTO event_clusters (master_id, cluster_id, lat, lon, depth, mag) "
+        "VALUES (:master_id, :cluster_id, :lat, :lon, :depth, :mag)"
     )
     with engine.begin() as conn:
         for _, row in df.iterrows():
             conn.execute(
                 q,
                 {
-                    "event_id": str(row["master_id"]),
+                    "master_id": str(row["master_id"]),
                     "cluster_id": int(row["cluster_id"]),
                     "lat": float(row["lat"]),
                     "lon": float(row["lon"]),
                     "depth": float(row["depth"]),
+                    "mag": float(row.get("mag", float("nan"))),
                 },
             )
 
@@ -142,7 +148,7 @@ def upload_relocated_events(engine, cat_file: str) -> None:
         "hour",
         "minute",
         "second",
-        "event_id",
+        "master_id",
         "lat",
         "lon",
         "depth",
@@ -165,8 +171,8 @@ def upload_relocated_events(engine, cat_file: str) -> None:
     df = pd.read_csv(cat_file, delim_whitespace=True, header=None, names=cols)
     q = text(
         "REPLACE INTO relocated_events "
-        "(event_id, datetime, lat, lon, depth, mag, rmsP, rmsS, eh, ez, et) "
-        "VALUES (:event_id, :datetime, :lat, :lon, :depth, :mag, :rmsP, :rmsS, :eh, :ez, :et)"
+        "(master_id, datetime, lat, lon, depth, mag, rmsP, rmsS, eh, ez, et) "
+        "VALUES (:master_id, :datetime, :lat, :lon, :depth, :mag, :rmsP, :rmsS, :eh, :ez, :et)"
     )
     with engine.begin() as conn:
         for _, r in df.iterrows():
@@ -181,7 +187,7 @@ def upload_relocated_events(engine, cat_file: str) -> None:
             conn.execute(
                 q,
                 {
-                    "event_id": int(r["event_id"]),
+                    "master_id": int(r["master_id"]),
                     "datetime": dt,
                     "lat": float(r["lat"]),
                     "lon": float(r["lon"]),
