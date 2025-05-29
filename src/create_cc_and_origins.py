@@ -35,7 +35,10 @@ from obspy.signal.cross_correlation import correlate
 from sklearn.cluster import DBSCAN
 
 # Centralised path configuration
-from .config import (
+# Import configuration from the src package. We use an absolute import so that
+# this script can be executed directly as ``python src/create_cc_and_origins.py``
+# without requiring ``-m`` module syntax.
+from config import (
     USE_DATABASE,
     DB_HOST,
     DB_USER,
