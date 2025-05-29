@@ -31,18 +31,17 @@ from datetime import datetime
 from obspy import UTCDateTime
 import glob
 
+# Centralised path configuration
+from config import (
+    CLUSTER_ROOT,
+    EVENTS_CSV,
+    STATIONS_CSV,
+)
+
+
 ###############################################################################
 # CONFIG
 ###############################################################################
-
-# Path to the cross-corr output root
-CLUSTER_ROOT = "./xcorr_output"
-
-# CSV with columns: master_id, lat, lon, depth, datetime, cluster_id.
-EVENTS_CSV = os.path.expanduser("~/Documents/seismic_process/relocation_3D/nebc/xcorr_output/clustered_origins.csv")
-
-# Station CSV. Expected columns include original station code and a unique_id.
-STATIONS_CSV = "/home/pgcseiscomp/Documents/seismic_process/velocity_model/nll/stations/stations.csv"
 
 # Process only clusters >= this value if desired (or leave as None).
 MIN_CLUSTER = None  # e.g. 37

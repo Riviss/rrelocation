@@ -23,14 +23,14 @@ from obspy.signal import cross_correlation as xcorr
 from multiprocessing import Pool
 from sklearn.cluster import DBSCAN
 
-###############################################################################
-# CONFIG - adjust to your paths/needs
-###############################################################################
-
-ORIGINS_PATH = "/home/pgcseiscomp/Documents/projects/velocitymodel_to_traveltimegrid/events/KSMMA/origins.csv"
-ARRIVALS_PATH = "/home/pgcseiscomp/Documents/projects/velocitymodel_to_traveltimegrid/events/KSMMA/arrivals.csv"
-STATIONS_PATH = "/home/pgcseiscomp/Documents/seismic_process/velocity_model/nll/stations/stations.csv"
-WF_PATH       = "/home/pgcseiscomp/antelope/wfs/"
+# Centralised path configuration
+from config import (
+    ORIGINS_PATH,
+    ARRIVALS_PATH,
+    STATIONS_PATH,
+    WAVEFORM_ROOT as WF_PATH,
+    XCORR_OUTDIR,
+)
 
 EARTH_RADIUS_KM = 6371.0
 DEG2RAD         = np.pi / 180.0
@@ -43,9 +43,6 @@ PRETRIG_DEFAULT  = 0.1
 POSTTRIG_DEFAULT = 0.4
 LEAD_TIME_DEFAULT = 3
 POST_TIME_DEFAULT = 3
-
-XCORR_OUTDIR = "./xcorr_output"
-os.makedirs(XCORR_OUTDIR, exist_ok=True)
 
 NUM_CORES  = 8
 

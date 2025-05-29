@@ -8,7 +8,7 @@ This repository contains scripts for cross‑correlating seismic waveforms and p
 src/        Python utilities and cross‑correlation helpers
 scripts/    Shell and Julia run scripts
 data/       Sample input/output folders
-docs/       Additional documentation
+docs/       Additional documentation (see `docs/FILE_FORMATS.md`)
 ```
 
 Key Python scripts now live in `src/`:
@@ -18,6 +18,9 @@ Key Python scripts now live in `src/`:
 - `create_relocation_files.py` – chunked cross‑correlation workflow that limits memory use.
 
 The `scripts/` folder contains the Julia relocation script (`run_growclust3D.jl` and its multi‑process variant) and a helper shell script `run_relocation.sh` which loops over cluster directories.
+
+
+Configuration of file paths is centralised in `src/config.py`.
 
 ## Usage
 
@@ -36,8 +39,8 @@ The `scripts/` folder contains the Julia relocation script (`run_growclust3D.jl`
    ```bash
    bash scripts/run_relocation.sh
    ```
-
-Edit the paths at the top of each script to match your data layout before running.
+   
+Edit the paths in `src/config.py` to match your data layout before running the scripts.
 
 ## Installation
 

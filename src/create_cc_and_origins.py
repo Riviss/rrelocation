@@ -34,19 +34,20 @@ from obspy import read, UTCDateTime
 from obspy.signal.cross_correlation import correlate
 from sklearn.cluster import DBSCAN
 
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+# Centralised path configuration
+from .config import (
+    ORIGINS_PATH,
+    ARRIVALS_PATH,
+    STATIONS_PATH,
+    WAVEFORM_ROOT,
+    XCORR_OUTDIR,
+)
 
-###############################################################################
-# FILE PATHS
-###############################################################################
-ORIGINS_PATH  = "/home/pgcseiscomp/Documents/projects/velocitymodel_to_traveltimegrid/events/KSMMA/origins.csv"
-ARRIVALS_PATH = "/home/pgcseiscomp/Documents/projects/velocitymodel_to_traveltimegrid/events/KSMMA/arrivals.csv"
-STATIONS_PATH = "/home/pgcseiscomp/Documents/seismic_process/velocity_model/nll/stations/stations.csv"
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 ###############################################################################
 # OUTPUT CONFIG
 ###############################################################################
-XCORR_OUTDIR = "./xcorr_output"
 os.makedirs(XCORR_OUTDIR, exist_ok=True)
 
 ###############################################################################
@@ -70,9 +71,6 @@ BANDPASS_HI    = 10.0
 
 # We'll skip any cluster with ID < START_CLUSTER
 START_CLUSTER  = 0
-
-# Path to waveforms
-WAVEFORM_ROOT  = "/home/pgcseiscomp/antelope/wfs"
 
 ###############################################################################
 # LOAD + DBSCAN
