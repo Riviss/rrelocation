@@ -177,6 +177,8 @@ cython_debug/
 data/in/evlist.txt
 data/in/stlist.txt
 data/in/xcordata.txt
+data/out/*
 
 # Ignore all contents of velocity model dirs
-data/nll/*/*
+data/nll/*
+xcorr_output/*
