@@ -172,3 +172,11 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Ignore big input files
+data/in/evlist.txt
+data/in/stlist.txt
+data/in/xcordata.txt
+
+# Ignore all contents of velocity model dirs
+data/nll/*/*
