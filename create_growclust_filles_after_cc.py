@@ -2,6 +2,9 @@
 # -*- coding: utf-8 -*-
 
 """
+Utility script to build GrowClust input files from cross-correlation results.
+Edit path constants below before running.
+
 Script to create GrowClust-style files for each cluster:
  - evlist.txt   (date/time lat lon depth placeholders eventID)
  - stlist.txt   (sta lat lon elev)

@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+This script prepares cross-correlation files for GrowClust.
+Edit the paths in the CONFIG section before running.
+
+
 DBSCAN + chunked cross-correlation (single-pool approach), reading from CSV files and
 waveforms from /home/pgcseiscomp/antelope/wfs/YYYY/MM/DD/YYYYMMDD.*.sta..chan.mseed
 

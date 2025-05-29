@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 Chunk-based cross-correlation with minimal memory usage:
+Edit the CONFIG section below before running this script.
+
  - We only ever load two chunks of waveforms (chunk i and chunk j)
    into memory at a time.
  - Immediately write cross-correlation results to CSV to avoid
