@@ -1,6 +1,6 @@
 # rrelocation
 
-This repository contains scripts for cross‑correlating seismic waveforms and performing relative relocation using the GrowClust3D software. The code was adapted for internal use and expects data in specific directory structures.
+This repository contains scripts for cross‑correlating seismic waveforms and performing relative relocation using the `GrowClust3D.jl` package. The code was adapted for internal use and expects data in specific directory structures. `GrowClust3D.jl` is the Julia implementation of the original GrowClust algorithm.
 
 ## Repository Layout
 
@@ -18,8 +18,7 @@ Key Python scripts now live in `src/`:
 - `create_relocation_files.py` – chunked cross‑correlation workflow that limits memory use.
 - `mysql_pipeline.py` – detect cluster changes, rerun relocation and upload results to a MySQL database.
 
-The `scripts/` folder contains the Julia relocation script (`run_growclust3D.jl` and its multi‑process variant) and a helper shell script `run_relocation.sh` which loops over cluster directories.
-
+The `scripts/` folder contains the Julia relocation script (`run_growclust3D.jl` and its multi‑process variant) and a helper shell script `run_relocation.sh` which loops over cluster directories. These scripts call the `GrowClust3D.jl` package, a Julia port of the original GrowClust relocation algorithm.
 
 Configuration of file paths is centralised in `src/config.py`.
 
@@ -50,15 +49,13 @@ Edit the paths in `src/config.py` to match your data layout before running the s
 
 ## Installation
 
-Create a virtual environment and install dependencies:
+We recommend installing the Python dependencies inside an Anaconda environment:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
+conda create -n rreloc python=3.8
+conda activate rreloc
 pip install -r requirements.txt
 ```
-
-
 
 ## License
 
