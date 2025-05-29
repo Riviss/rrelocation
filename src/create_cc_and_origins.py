@@ -341,9 +341,17 @@ def crosscorr_group(args):
 ###############################################################################
 # MAIN (SINGLE POOL FOR ALL TASKS)
 ###############################################################################
-def run_script():
-    cpu_count = 6# multiprocessing.cpu_count()
-    print(f"Detected {cpu_count} CPU cores. We'll use them all.\n")
+def run_script(start_cluster: int = START_CLUSTER,
+               cc_threshold: float = CC_THRESHOLD,
+               processes: int | None = None) -> None:
+    """Main entry point for the cross-correlation workflow."""
+    global START_CLUSTER, CC_THRESHOLD
+
+    START_CLUSTER = start_cluster
+    CC_THRESHOLD = cc_threshold
+
+    cpu_count = processes or multiprocessing.cpu_count()
+    print(f"Detected {cpu_count} CPU cores. Using {cpu_count} processes.\n")
 
     # 1) Load & DBSCAN
     df_origin, df_arrival = load_and_cluster_dbscan()
@@ -415,4 +423,33 @@ def run_script():
     print("\nAll done. Check xcorr_output/cluster_* directories.")
 
 if __name__ == "__main__":
-    run_script()
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Prepare cross-correlation files for GrowClust"
+    )
+    parser.add_argument(
+        "--start-cluster",
+        type=int,
+        default=START_CLUSTER,
+        help="Skip clusters with ID below this value",
+    )
+    parser.add_argument(
+        "--cc-threshold",
+        type=float,
+        default=CC_THRESHOLD,
+        help="Minimum correlation coefficient to keep a pair",
+    )
+    parser.add_argument(
+        "--processes",
+        type=int,
+        default=None,
+        help="Number of worker processes to use",
+    )
+
+    args = parser.parse_args()
+    run_script(
+        start_cluster=args.start_cluster,
+        cc_threshold=args.cc_threshold,
+        processes=args.processes,
+    )
