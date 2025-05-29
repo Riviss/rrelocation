@@ -63,7 +63,7 @@ PRE_TIME       = 0.1      # seconds before pick
 POST_TIME      = 0.4      # seconds after pick
 CHUNK_SIZE     = 100      # picks per chunk => avoid memory blow-up
 MAX_SHIFT_SEC  = 0.4      # ±0.4 s shift
-CC_THRESHOLD   = 0.4      # keep pairs if corr >= 0.4 (or abs >= 0.4 if ABSOLUTE_CORR=True)
+CC_THRESHOLD   = 0.6      # keep pairs if corr >= 0.4 (or abs >= 0.4 if ABSOLUTE_CORR=True)
 ABSOLUTE_CORR  = True     # if True => require abs(ccmax) >= CC_THRESHOLD
 BANDPASS_LO    = 2.0
 BANDPASS_HI    = 10.0
@@ -260,17 +260,14 @@ def crosscorr_group(args):
                         max_samps = int(round(MAX_SHIFT_SEC * sr))
                         cc = correlate(dataA, dataB, max_samps)
                         imax = np.argmax(cc)
-                        ccmax= cc[imax]
-                        if ABSOLUTE_CORR:
-                            if abs(ccmax) < CC_THRESHOLD:
-                                continue
-                        else:
-                            if ccmax < CC_THRESHOLD:
-                                continue
+                        ccmax = cc[imax]
+                        ccval = ccmax * ccmax
+                        if ccval < CC_THRESHOLD:
+                            continue
 
                         lag_samp = imax - max_samps
                         lag_sec  = lag_samp / sr
-                        line = f"{midA} {midB} {sta} {lag_sec:.3f} {ccmax:.3f} {phase}"
+                        line = f"{midA} {midB} {sta} {lag_sec:.3f} {ccval:.3f} {phase}"
                         lines_buffer.append(line)
                         if len(lines_buffer) >= BATCH_SIZE:
                             flush_buffer()
@@ -305,18 +302,14 @@ def crosscorr_group(args):
                         max_samps = int(round(MAX_SHIFT_SEC * sr))
                         cc = correlate(dataA, dataB, max_samps)
                         imax = np.argmax(cc)
-                        ccmax= cc[imax]
-
-                        if ABSOLUTE_CORR:
-                            if abs(ccmax) < CC_THRESHOLD:
-                                continue
-                        else:
-                            if ccmax < CC_THRESHOLD:
-                                continue
+                        ccmax = cc[imax]
+                        ccval = ccmax * ccmax
+                        if ccval < CC_THRESHOLD:
+                            continue
 
                         lag_samp = imax - max_samps
                         lag_sec  = lag_samp / sr
-                        line = f"{midA} {midB} {sta} {lag_sec:.3f} {ccmax:.3f} {phase}"
+                        line = f"{midA} {midB} {sta} {lag_sec:.3f} {ccval:.3f} {phase}"
                         lines_buffer.append(line)
                         if len(lines_buffer) >= BATCH_SIZE:
                             flush_buffer()

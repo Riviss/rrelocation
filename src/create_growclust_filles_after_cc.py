@@ -52,7 +52,7 @@ XCORR_THRESHOLD = 0.6  # Adjust as needed
 
 # Option to square the cross-correlation value before processing (True/False).
 # Note: if squared, the threshold applies to the squared value.
-SQUARE_CC = True
+SQUARE_CC = FALSE
 
 ###############################################################################
 # LOAD EVENT / STATION INFO
