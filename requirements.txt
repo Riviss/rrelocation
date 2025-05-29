@@ -2,3 +2,5 @@ numpy
 pandas
 scikit-learn
 obspy
+mysql-connector-python
+SQLAlchemy

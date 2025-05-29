@@ -16,6 +16,7 @@ Key Python scripts now live in `src/`:
 - `create_cc_and_origins.py` – cluster catalog origins with DBSCAN and generate cross‑correlation tasks.
 - `create_growclust_files_after_cc.py` – build `evlist.txt`, `stlist.txt` and `xcordata.txt` files for GrowClust.
 - `create_relocation_files.py` – chunked cross‑correlation workflow that limits memory use.
+- `mysql_pipeline.py` – detect cluster changes, rerun relocation and upload results to a MySQL database.
 
 The `scripts/` folder contains the Julia relocation script (`run_growclust3D.jl` and its multi‑process variant) and a helper shell script `run_relocation.sh` which loops over cluster directories.
 
@@ -39,7 +40,12 @@ Configuration of file paths is centralised in `src/config.py`.
    ```bash
    bash scripts/run_relocation.sh
    ```
-   
+
+4. Upload relocated events to MySQL:
+   ```bash
+   python src/mysql_pipeline.py
+   ```
+
 Edit the paths in `src/config.py` to match your data layout before running the scripts.
 
 ## Installation
