@@ -22,10 +22,13 @@ import shutil
 import subprocess
 from datetime import datetime
 from typing import Dict, Iterable, List, Set
+import multiprocessing
+from multiprocessing import Pool
 
 import pandas as pd
 
 from sqlalchemy import create_engine, text
+from obspy import UTCDateTime
 
 from config import (
     AGG_CAT,
@@ -39,12 +42,20 @@ from config import (
     DB_USER,
     DB_PASSWORD,
     DB_NAME,
+    STATIONS_CSV,
+    CLUSTER_ROOT,
     get_db_engine,
 )
 
-from create_cc_and_origins import load_and_cluster_dbscan
-
-
+from create_cc_and_origins import load_and_cluster_dbscan, crosscorr_group
+from create_growclust_files_after_cc import (
+    create_masterid_map,
+    create_station_mapping,
+    write_evlist,
+    write_stlist,
+    write_xcordata,
+    load_station_info,
+)
 ###############################################################################
 # Database helpers
 ###############################################################################
@@ -204,6 +215,98 @@ def upload_relocated_events(engine, cat_file: str) -> None:
 
 
 ###############################################################################
+# Cross-correlation and file builders
+###############################################################################
+
+def run_crosscorr_for_clusters(
+    df_origin: pd.DataFrame,
+    df_arrival: pd.DataFrame,
+    cluster_ids: Iterable[int],
+    processes: int | None = None,
+) -> None:
+    """Run cross-correlation for selected clusters only."""
+
+    arr = pd.merge(
+        df_arrival,
+        df_origin[["master_id", "cluster_id"]],
+        on="master_id",
+        how="left",
+    )
+    arr = arr[arr["cluster_id"] != -1].copy()
+    arr["pick_time"] = arr["arrival_time"].apply(lambda x: UTCDateTime(x))
+
+    if os.path.exists(STATIONS_CSV):
+        df_st = pd.read_csv(STATIONS_CSV)[["unique_id", "station", "network"]].drop_duplicates()
+        df_st.rename(columns={"station": "sta"}, inplace=True)
+        arr = pd.merge(arr, df_st, on="sta", how="left")
+        arr["network"] = arr["network"].fillna("NA")
+    else:
+        arr["network"] = "NA"
+
+    cpu_count = processes or multiprocessing.cpu_count()
+
+    tasks = []
+    for cid in cluster_ids:
+        dfc = arr[arr["cluster_id"] == cid]
+        if dfc.empty:
+            continue
+        n_events = df_origin[df_origin["cluster_id"] == cid].shape[0]
+        if n_events < 2:
+            continue
+
+        cdir = os.path.join(XCORR_OUTDIR, f"cluster_{cid}")
+        os.makedirs(cdir, exist_ok=True)
+
+        for (net, st, ch, ph), df_g in dfc.groupby(["network", "sta", "chan", "phase"]):
+            if len(df_g) < 2:
+                continue
+            tasks.append(
+                {
+                    "cluster_id": cid,
+                    "network": net,
+                    "sta": st,
+                    "chan": ch,
+                    "phase": ph,
+                    "df_group": df_g,
+                    "cluster_dir": cdir,
+                }
+            )
+
+    if not tasks:
+        print("No cross-correlation tasks for changed clusters")
+        return
+
+    with Pool(processes=cpu_count) as pool:
+        results = pool.map(crosscorr_group, tasks)
+
+    for msg in results:
+        print("Worker =>", msg)
+
+
+def build_growclust_files_for_clusters(
+    df_origin: pd.DataFrame, cluster_ids: Iterable[int]
+) -> None:
+    """Create GrowClust input files for selected clusters."""
+
+    df_events = df_origin[["master_id", "lat", "lon", "depth", "datetime", "cluster_id"]].copy()
+    df_stations = load_station_info(STATIONS_CSV)
+    master_map = create_masterid_map(df_events)
+    station_map = create_station_mapping(df_stations)
+
+    for cid in cluster_ids:
+        cdir = os.path.join(CLUSTER_ROOT, f"cluster_{cid}")
+        os.makedirs(cdir, exist_ok=True)
+        dfc = df_events[df_events["cluster_id"] == cid].copy()
+        if dfc.empty:
+            continue
+        write_evlist(dfc, cid, cdir, master_map)
+        write_stlist(df_stations, cid, cdir)
+        write_xcordata(cid, cdir, master_map, station_map)
+
+
+
+
+###############################################################################
 # Relocation runner
 ###############################################################################
 
@@ -253,6 +356,7 @@ def detect_changed_clusters(
     df_origin: pd.DataFrame, prev: Dict[str, Dict[str, float]]
 ) -> List[int]:
     changed: Set[int] = set()
+    seen_prev: Set[str] = set()
     for _, row in df_origin.iterrows():
         eid = str(row["master_id"])
         cid = int(row["cluster_id"])
@@ -263,6 +367,7 @@ def detect_changed_clusters(
         if info is None:
             changed.add(cid)
             continue
+        seen_prev.add(eid)
         loc_changed = (
             abs(info["lat"] - lat) > 1e-4
             or abs(info["lon"] - lon) > 1e-4
@@ -270,6 +375,11 @@ def detect_changed_clusters(
         )
         if info["cluster_id"] != cid or loc_changed:
             changed.add(cid)
+
+    removed_ids = set(prev.keys()) - seen_prev
+    for rid in removed_ids:
+        changed.add(int(prev[rid]["cluster_id"]))
+
     return sorted(changed)
 
 
@@ -281,7 +391,7 @@ def main() -> None:
     engine = get_engine()
     ensure_tables(engine)
 
-    origin_df, _ = load_and_cluster_dbscan()
+    origin_df, arrival_df = load_and_cluster_dbscan()
     prev = fetch_previous_clusters(engine)
     changed_clusters = detect_changed_clusters(origin_df, prev)
 
@@ -289,7 +399,10 @@ def main() -> None:
         print("No cluster changes detected")
         return
 
-    print(f"Relocating clusters: {changed_clusters}")
+    print(f"Processing clusters: {changed_clusters}")
+
+    run_crosscorr_for_clusters(origin_df, arrival_df, changed_clusters)
+    build_growclust_files_for_clusters(origin_df, changed_clusters)
     run_relocation_for_clusters(changed_clusters)
     upload_relocated_events(engine, AGG_CAT)
     update_event_clusters(engine, origin_df)
