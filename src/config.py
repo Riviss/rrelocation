@@ -36,7 +36,7 @@ os.makedirs(XCORR_OUTDIR, exist_ok=True)
 
 # Additional files used after cross-correlation
 CLUSTER_ROOT = XCORR_OUTDIR
-EVENTS_CSV = os.path.expanduser("~/Documents/seismic_process/relocation_3D/nebc/xcorr_output/clustered_origins.csv")
+EVENTS_CSV = os.path.expanduser("./xcorr_output/clustered_origins.csv")
 STATIONS_CSV = STATIONS_PATH  # used by create_growclust_filles_after_cc
 
 # GrowClust related
