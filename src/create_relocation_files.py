@@ -245,9 +245,14 @@ def crosscorr_station_phase(args):
     df  = args['arr_subset']
     
     # We'll store results in a single CSV for that station–phase:
-    out_file = os.path.join(XCORR_OUTDIR, f"cluster_{cid}_station_{sta}_phase_{pha}.csv")
-    with open(out_file, 'w') as f:
+    out_file = os.path.join(XCORR_OUTDIR,
+                            f"cluster_{cid}_station_{sta}_phase_{pha}.csv")
+    with open(out_file, "w") as f:
         f.write("oridA,oridB,station,channel,phase,xcorr\n")
+
+    # Track written pairs to avoid duplicates.  We normalise the event order
+    # (min, max) so A,B and B,A are considered the same pair.
+    written_pairs = set()
     
     # If fewer than 2 arrivals, skip
     n = len(df)
@@ -269,7 +274,16 @@ def crosscorr_station_phase(args):
         if len(st_i) > 1:
             results_i = xcorr_pairwise(st_i, st_i, max_lag=50, self_xcorr=True)
             if results_i:
-                pd.DataFrame(results_i).to_csv(out_file, mode='a', header=False, index=False)
+                filtered = []
+                for r in results_i:
+                    key = tuple(sorted((r["oridA"], r["oridB"]))) + (
+                        r["station"], r["channel"], r["phase"])
+                    if key not in written_pairs:
+                        written_pairs.add(key)
+                        filtered.append(r)
+                if filtered:
+                    pd.DataFrame(filtered).to_csv(
+                        out_file, mode="a", header=False, index=False)
 
         # Cross-correlation with subsequent chunk j>i
         for j in range(i+1, n_chunks):
@@ -286,7 +300,16 @@ def crosscorr_station_phase(args):
             # cross correlate st_i vs st_j
             results_ij = xcorr_pairwise(st_i, st_j, max_lag=50, self_xcorr=False)
             if results_ij:
-                pd.DataFrame(results_ij).to_csv(out_file, mode='a', header=False, index=False)
+                filtered = []
+                for r in results_ij:
+                    key = tuple(sorted((r["oridA"], r["oridB"]))) + (
+                        r["station"], r["channel"], r["phase"])
+                    if key not in written_pairs:
+                        written_pairs.add(key)
+                        filtered.append(r)
+                if filtered:
+                    pd.DataFrame(filtered).to_csv(
+                        out_file, mode="a", header=False, index=False)
             
             # discard st_j
             del st_j
