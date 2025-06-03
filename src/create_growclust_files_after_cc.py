@@ -206,6 +206,8 @@ def write_xcordata(cluster_id, outdir, master_mapping, station_mapping):
 
     from collections import defaultdict
     pair_dict = defaultdict(list)
+    # Track seen station/phase measurements for each unordered pair
+    seen_measurements = set()
 
     for xf in xcorr_files:
         with open(xf, 'r') as f:
@@ -251,13 +253,23 @@ def write_xcordata(cluster_id, outdir, master_mapping, station_mapping):
 
             # Check threshold using squared value if SQUARE_CC, otherwise use absolute value.
             if SQUARE_CC:
-                if rxco >= XCORR_THRESHOLD:
-                    pair_key = (idA, idB)
-                    pair_dict[pair_key].append((mapped_sta, tdif, rxco, ph))
+                keep_line = rxco >= XCORR_THRESHOLD
             else:
-                if abs(rxco) >= XCORR_THRESHOLD:
-                    pair_key = (idA, idB)
-                    pair_dict[pair_key].append((mapped_sta, tdif, rxco, ph))
+                keep_line = abs(rxco) >= XCORR_THRESHOLD
+
+            if keep_line:
+                # Use unordered pair to avoid duplicates with reversed event order
+                pair_key = tuple(sorted((idA, idB)))
+                # Ensure time difference is relative to the sorted order
+                if (idA, idB) != pair_key:
+                    tdif = -tdif
+
+                measurement_key = (pair_key[0], pair_key[1], mapped_sta, ph)
+                if measurement_key in seen_measurements:
+                    # Skip duplicate station/phase measurements for this pair
+                    continue
+                seen_measurements.add(measurement_key)
+                pair_dict[pair_key].append((mapped_sta, tdif, rxco, ph))
 
     outpath = os.path.join(cluster_dir, "xcordata.txt")
     with open(outpath, 'w') as f:

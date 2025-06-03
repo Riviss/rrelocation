@@ -31,8 +31,8 @@ for cluster_folder in xcorr_output/cluster_*; do
   rm -f data/out/out.nllgrid3D.cat data/out/out.nllgrid3D.clust data/out/out.nllgrid3D.log
 
   # Run the Julia script.
-  julia /home/pgcseiscomp/Documents/seismic_process/relocation_3D/nebc/run_growclust3D.jl \
-        /home/pgcseiscomp/Documents/seismic_process/relocation_3D/nebc/dawson.nllgrid3D.inp
+  julia /home/pgcseiscomp/Documents/seismic_process/relocation_3D/nebc/rrelocation/scripts/run_growclust3D.jl \
+        /home/pgcseiscomp/Documents/seismic_process/relocation_3D/nebc/rrelocation/scripts/dawson.nllgrid3D.inp
 
   # Use the folder name (e.g., cluster_0) as a marker.
   cluster_name=$(basename "$cluster_folder")
