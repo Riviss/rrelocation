@@ -15,6 +15,10 @@ agg_log="data/aggregated/out.nllgrid3D.log"
 > "$agg_clust"
 > "$agg_log"
 
+# Determine repository root based on this script location
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+
 # Loop through each cluster folder in xcorr_output.
 for cluster_folder in xcorr_output/cluster_*; do
   [ -d "$cluster_folder" ] || continue
@@ -30,9 +34,9 @@ for cluster_folder in xcorr_output/cluster_*; do
   # Remove previous Julia outputs if present.
   rm -f data/out/out.nllgrid3D.cat data/out/out.nllgrid3D.clust data/out/out.nllgrid3D.log
 
-  # Run the Julia script.
-  julia /home/pgcseiscomp/Documents/seismic_process/relocation_3D/nebc/rrelocation/scripts/run_growclust3D.jl \
-        /home/pgcseiscomp/Documents/seismic_process/relocation_3D/nebc/rrelocation/scripts/dawson.nllgrid3D.inp
+  # Run the Julia script using paths relative to the repository
+  julia "$repo_root/scripts/run_growclust3D.jl" \
+        "$repo_root/dawson.nllgrid3D.inp"
 
   # Use the folder name (e.g., cluster_0) as a marker.
   cluster_name=$(basename "$cluster_folder")

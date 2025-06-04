@@ -35,7 +35,7 @@ nllgrid
 * fin_vzmdl (model name)
 ksmma_3D_lambert
 * fdir_ttab (directory for travel time tables/grids or NONE)
-../nebc/data/nll/dawson/
+data/nll/dawson/
 * projection (proj, ellps, lon0, lat0, rotANG, [latP1, latP2])
 lcc WGS84 -121.526444 55.547375 0.0 55.500000 56.500000
 *
