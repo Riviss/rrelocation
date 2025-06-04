@@ -46,6 +46,7 @@ DEG2RAD         = np.pi / 180.0
 TIME_WINDOW_DAYS   = 7
 DIST_KM            = 2
 DBSCAN_MIN_SAMPLES = 10
+MAX_CLUSTER_EVENTS = 1000
 
 PRETRIG_DEFAULT  = 0.1
 POSTTRIG_DEFAULT = 0.4
@@ -73,7 +74,8 @@ def approximate_xy(lat, lon, lat0=None, lon0=None):
 
 def cluster_events_dbscan(df_origins, time_window_days=7, dist_km=2, min_samples=1):
     """
-    Cluster events in a 3D space (X, Y, T_scaled) using DBSCAN (Chebyshev metric).
+    Cluster events in a 3D space (X, Y, T_scaled) using DBSCAN (Chebyshev metric)
+    and recursively split clusters larger than ``MAX_CLUSTER_EVENTS``.
     """
     df = df_origins.copy().sort_values(by='datetime').reset_index(drop=True)
     lat_arr = df['lat'].values
@@ -81,15 +83,35 @@ def cluster_events_dbscan(df_origins, time_window_days=7, dist_km=2, min_samples
     x_arr, y_arr = approximate_xy(lat_arr, lon_arr)
     dt_min = df['datetime'].min()
     dt_days = (df['datetime'] - dt_min).dt.total_seconds() / 86400.0
-    
-    # scale time so that 1 day ~ dist_km/time_window_days in X,Y space
+
     time_scale = dist_km / time_window_days
-    t_scaled   = dt_days * time_scale
-    
-    coords_3d = np.column_stack([x_arr, y_arr, t_scaled])
-    db = DBSCAN(eps=dist_km, min_samples=min_samples, metric='chebyshev', n_jobs=-1)
-    labels = db.fit_predict(coords_3d)
-    df['cluster'] = labels
+    t_scaled = dt_days * time_scale
+
+    coords = np.column_stack([x_arr, y_arr, t_scaled])
+
+    def recursive_dbscan(idxs):
+        nonlocal next_id
+        subcoords = coords[idxs]
+        labels = DBSCAN(eps=dist_km, min_samples=min_samples,
+                        metric='chebyshev', n_jobs=-1).fit_predict(subcoords)
+        for lbl in np.unique(labels):
+            subset = idxs[labels == lbl]
+            if lbl == -1:
+                final_labels[subset] = -1
+            elif len(subset) <= MAX_CLUSTER_EVENTS:
+                final_labels[subset] = next_id
+                next_id += 1
+            else:
+                stack.append(subset)
+
+    n = len(coords)
+    final_labels = np.full(n, -1, dtype=int)
+    next_id = 0
+    stack = [np.arange(n)]
+    while stack:
+        recursive_dbscan(stack.pop())
+
+    df['cluster'] = final_labels.astype(int)
     return df
 
 def load_and_cluster_dbscan():

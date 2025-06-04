@@ -67,6 +67,7 @@ os.makedirs(XCORR_OUTDIR, exist_ok=True)
 KM_RADIUS       = 1.0   # 'eps' in XY
 TIME_WINDOW_DAYS= 7.0   # scale 7 days => 1 km in t-dimension
 MIN_SAMPLES     = 10    # minimum # of events per cluster
+MAX_CLUSTER_EVENTS = 1000  # recursively split clusters larger than this
 
 ###############################################################################
 # CROSS-CORRELATION SETTINGS
@@ -129,21 +130,42 @@ def load_and_cluster_dbscan():
     df_arrival['arrival_time'] = pd.to_datetime(df_arrival['arrival_time'], errors='coerce')
     df_arrival.dropna(subset=['master_id','arrival_time','sta','phase'], inplace=True)
 
-    # DBSCAN in (x,y,t)
+    # DBSCAN in (x,y,t) with recursive splitting for large clusters
     lat_arr = df_origin['lat'].values
     lon_arr = df_origin['lon'].values
     x_arr, y_arr = approximate_xy(lat_arr, lon_arr)
 
     dt_min = df_origin['datetime'].min()
     dt_days = (df_origin['datetime'] - dt_min).dt.total_seconds() / 86400.0
-    # scale time so that TIME_WINDOW_DAYS => KM_RADIUS in XY
     scale_time = KM_RADIUS / TIME_WINDOW_DAYS
-    t_scaled   = dt_days * scale_time
+    t_scaled = dt_days * scale_time
 
     coords = np.column_stack([x_arr, y_arr, t_scaled])
-    db = DBSCAN(eps=KM_RADIUS, min_samples=MIN_SAMPLES, metric='chebyshev', n_jobs=-1)
-    labels = db.fit_predict(coords)
-    df_origin['cluster_id'] = labels.astype(int)
+
+    def recursive_dbscan(idxs):
+        nonlocal next_id
+        subcoords = coords[idxs]
+        labels = DBSCAN(eps=KM_RADIUS, min_samples=MIN_SAMPLES,
+                        metric='chebyshev', n_jobs=-1).fit_predict(subcoords)
+        for lbl in np.unique(labels):
+            mask = labels == lbl
+            sel = idxs[mask]
+            if lbl == -1:
+                final_labels[sel] = -1
+            elif len(sel) <= MAX_CLUSTER_EVENTS:
+                final_labels[sel] = next_id
+                next_id += 1
+            else:
+                stack.append(sel)
+
+    n = len(coords)
+    final_labels = np.full(n, -1, dtype=int)
+    next_id = 0
+    stack = [np.arange(n)]
+    while stack:
+        recursive_dbscan(stack.pop())
+
+    df_origin['cluster_id'] = final_labels.astype(int)
     return df_origin, df_arrival
 
 ###############################################################################

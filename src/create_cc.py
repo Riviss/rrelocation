@@ -70,6 +70,7 @@ BANDPASS_HI_DEF     = 10.0     # Hz
 MAX_SHIFT_SEC_DEF   = 0.4      # ± shift for CC (s)
 CC_THRESHOLD_DEF    = 0.6      # |ρ| ≥ this keeps pair
 CHUNK_SIZE_DEF      = 100      # arrivals per chunk
+MAX_CLUSTER_EVENTS_DEF = 1000  # recursively split clusters larger than this
 
 START_CLUSTER_DEF   = 0        # skip clusters with ID < this
 LOGLEVEL_DEF        = "INFO"
@@ -127,8 +128,30 @@ def load_and_cluster_dbscan(km_radius, time_win_days, min_samples):
     t_scaled = t_days * km_radius / time_win_days
 
     coords = np.column_stack([x, y, t_scaled])
-    db = DBSCAN(eps=km_radius, min_samples=min_samples, metric="chebyshev", n_jobs=-1)
-    df_o["cluster_id"] = db.fit_predict(coords).astype(int)
+
+    def recursive_dbscan(idxs):
+        nonlocal next_id
+        subcoords = coords[idxs]
+        labels = DBSCAN(eps=km_radius, min_samples=min_samples,
+                        metric="chebyshev", n_jobs=-1).fit_predict(subcoords)
+        for lbl in np.unique(labels):
+            subset = idxs[labels == lbl]
+            if lbl == -1:
+                final_labels[subset] = -1
+            elif len(subset) <= MAX_CLUSTER_EVENTS_DEF:
+                final_labels[subset] = next_id
+                next_id += 1
+            else:
+                stack.append(subset)
+
+    n = len(coords)
+    final_labels = np.full(n, -1, dtype=int)
+    next_id = 0
+    stack = [np.arange(n)]
+    while stack:
+        recursive_dbscan(stack.pop())
+
+    df_o["cluster_id"] = final_labels.astype(int)
 
     return df_o, df_a
 
