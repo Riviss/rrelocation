@@ -88,9 +88,11 @@ MAX_CLUSTER_EVENTS = 1000  # recursively split clusters larger than this
 ###############################################################################
 PRE_TIME       = 0.1      # seconds before pick
 POST_TIME      = 0.4      # seconds after pick
+BUFFER_SEC     = 1.0      # initial trim buffer
+EDGE_DROP_SEC  = 0.2      # drop edges after filtering
 CHUNK_SIZE     = 100      # picks per chunk => avoid memory blow-up
 MAX_SHIFT_SEC  = 0.4      # ±0.4 s shift
-CC_THRESHOLD   = 0.6      # keep pairs if corr >= 0.4 (or abs >= 0.4 if ABSOLUTE_CORR=True)
+CC_THRESHOLD   = 0.6      # |ρ| ≥ threshold
 ABSOLUTE_CORR  = True     # if True => require abs(ccmax) >= CC_THRESHOLD
 BANDPASS_LO    = 2.0
 BANDPASS_HI    = 10.0
@@ -213,11 +215,26 @@ def load_trace_for_pick(row):
     f = matches[0]
     try:
         st = read(f)
-        # Rough trim => extra 1s buffer
-        st.trim(pick_t - PRE_TIME - 1.0, pick_t + POST_TIME + 1.0)
-        # Bandpass
-        st.filter("bandpass", freqmin=BANDPASS_LO, freqmax=BANDPASS_HI)
-        # Final precise trim
+        # 1) wide trim with buffer
+        st.trim(pick_t - PRE_TIME - BUFFER_SEC, pick_t + POST_TIME + BUFFER_SEC)
+        # 2) zero-phase bandpass and taper
+        st.filter(
+            "bandpass",
+            freqmin=BANDPASS_LO,
+            freqmax=BANDPASS_HI,
+            corners=4,
+            zerophase=True,
+        )
+        st.taper(max_percentage=0.05, type="cosine")
+        # 3) demean and detrend
+        st.detrend("demean")
+        st.detrend("linear")
+        # 4) drop filter edge before final window
+        st.trim(
+            pick_t - PRE_TIME - EDGE_DROP_SEC,
+            pick_t + POST_TIME + EDGE_DROP_SEC,
+        )
+        # 5) final precise trim
         st.trim(pick_t - PRE_TIME, pick_t + POST_TIME)
 
         if len(st) == 0:
@@ -229,6 +246,19 @@ def load_trace_for_pick(row):
     except Exception as e:
         logging.error("loading %s failed: %s", f, e)
         return None
+
+###############################################################################
+# NORMALIZED CROSS-CORRELATION HELPER
+###############################################################################
+def ncc_max(dataA: np.ndarray, dataB: np.ndarray, max_samps: int) -> tuple[float, int]:
+    """Return the maximum normalized correlation and lag in samples."""
+    cc = correlate(dataA, dataB, max_samps)
+    norm = np.linalg.norm(dataA) * np.linalg.norm(dataB)
+    if norm == 0:
+        return 0.0, 0
+    cc /= norm
+    imax = np.argmax(np.abs(cc))
+    return float(cc[imax]), imax - max_samps
 
 ###############################################################################
 # CROSS-CORRELATION (CHUNKED) WORKER
@@ -318,16 +348,11 @@ def crosscorr_group(args):
                             sr= srA
 
                         max_samps = int(round(MAX_SHIFT_SEC * sr))
-                        cc = correlate(dataA, dataB, max_samps)
-                        imax = np.argmax(cc)
-                        ccmax = cc[imax]
-                        ccval = ccmax * ccmax
-                        if ccval < CC_THRESHOLD:
+                        ccmax, lag_samp = ncc_max(dataA, dataB, max_samps)
+                        if abs(ccmax) < CC_THRESHOLD:
                             continue
-
-                        lag_samp = imax - max_samps
                         lag_sec  = lag_samp / sr
-                        line = f"{midA} {midB} {sta} {lag_sec:.3f} {ccval:.3f} {phase}"
+                        line = f"{midA} {midB} {sta} {lag_sec:.3f} {ccmax:.3f} {phase}"
                         lines_buffer.append(line)
                         if len(lines_buffer) >= BATCH_SIZE:
                             flush_buffer()
@@ -360,16 +385,11 @@ def crosscorr_group(args):
                             sr= srA
 
                         max_samps = int(round(MAX_SHIFT_SEC * sr))
-                        cc = correlate(dataA, dataB, max_samps)
-                        imax = np.argmax(cc)
-                        ccmax = cc[imax]
-                        ccval = ccmax * ccmax
-                        if ccval < CC_THRESHOLD:
+                        ccmax, lag_samp = ncc_max(dataA, dataB, max_samps)
+                        if abs(ccmax) < CC_THRESHOLD:
                             continue
-
-                        lag_samp = imax - max_samps
                         lag_sec  = lag_samp / sr
-                        line = f"{midA} {midB} {sta} {lag_sec:.3f} {ccval:.3f} {phase}"
+                        line = f"{midA} {midB} {sta} {lag_sec:.3f} {ccmax:.3f} {phase}"
                         lines_buffer.append(line)
                         if len(lines_buffer) >= BATCH_SIZE:
                             flush_buffer()
