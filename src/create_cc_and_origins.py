@@ -27,6 +27,8 @@ import numpy as np
 import pandas as pd
 import warnings
 import multiprocessing
+import argparse
+import logging
 from multiprocessing import Pool
 from datetime import datetime
 
@@ -53,6 +55,18 @@ from config import (
     XCORR_OUTDIR,
     get_db_engine,
 )
+
+###############################################################################
+# Logging
+###############################################################################
+
+def setup_logging(level: str = "INFO") -> None:
+    """Configure root logger."""
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -193,7 +207,7 @@ def load_trace_for_pick(row):
 
     matches = glob.glob(path_pattern)
     if not matches:
-        print(f"WARNING: no file match => {path_pattern}")
+        logging.warning("no file match => %s", path_pattern)
         return None
 
     f = matches[0]
@@ -207,13 +221,13 @@ def load_trace_for_pick(row):
         st.trim(pick_t - PRE_TIME, pick_t + POST_TIME)
 
         if len(st) == 0:
-            print(f"WARNING: no data after trim => {f}, pick@{pick_t}")
+            logging.warning("no data after trim => %s, pick@%s", f, pick_t)
             return None
         tr = st[0]
         tr.stats.master_id = row['master_id']
         return tr
     except Exception as e:
-        print(f"ERROR loading {f}: {e}")
+        logging.error("loading %s failed: %s", f, e)
         return None
 
 ###############################################################################
@@ -235,7 +249,15 @@ def crosscorr_group(args):
     outname = f"xcorr_cluster_{cid}_{net}_{sta}_{cha}_{phase}.txt"
     outpath = os.path.join(cdir, outname)
 
-    print(f"[cluster {cid}] crosscorr_group => net={net}, sta={sta}, chan={cha}, phase={phase}, picks={len(df_g)}")
+    logging.info(
+        "[cluster %s] crosscorr_group net=%s sta=%s chan=%s phase=%s picks=%d",
+        cid,
+        net,
+        sta,
+        cha,
+        phase,
+        len(df_g),
+    )
 
     with open(outpath, 'w') as f_out:
         hdr = f"# Cross-corr cluster={cid}, network={net}, sta={sta}, chan={cha}, phase={phase}, picks={len(df_g)}"
@@ -373,13 +395,13 @@ def run_script(start_cluster: int = START_CLUSTER,
     CC_THRESHOLD = cc_threshold
 
     cpu_count = processes or multiprocessing.cpu_count()
-    print(f"Detected {cpu_count} CPU cores. Using {cpu_count} processes.\n")
+    logging.info("Detected %d CPU cores. Using %d processes", cpu_count, cpu_count)
 
     # 1) Load & DBSCAN
     df_origin, df_arrival = load_and_cluster_dbscan()
     out_csv = os.path.join(XCORR_OUTDIR, "clustered_origins.csv")
     df_origin.to_csv(out_csv, index=False)
-    print(f"DBSCAN done. Wrote => {out_csv}\n")
+    logging.info("DBSCAN done. Wrote => %s", out_csv)
 
     # 2) Merge cluster_id => arrivals, skip noise
     df_arrival = pd.merge(df_arrival, df_origin[['master_id','cluster_id']],
@@ -401,7 +423,11 @@ def run_script(start_cluster: int = START_CLUSTER,
     # 3) Gather tasks for ALL clusters
     tasks = []
     clusters = sorted(df_arrival['cluster_id'].unique().astype(int))
-    print(f"Found {len(clusters)} clusters (excl noise). Clusters: {clusters}\n")
+    logging.info(
+        "Found %d clusters (excl noise). Clusters: %s",
+        len(clusters),
+        clusters,
+    )
 
     for cid in clusters:
         if cid < START_CLUSTER:
@@ -430,7 +456,9 @@ def run_script(start_cluster: int = START_CLUSTER,
                 'cluster_dir': cdir
             })
 
-    print(f"Prepared {len(tasks)} cross-correlation tasks across all clusters.\n")
+    logging.info(
+        "Prepared %d cross-correlation tasks across all clusters.", len(tasks)
+    )
 
     if tasks:
         # 4) Single pool => keep all cores busy
@@ -438,11 +466,11 @@ def run_script(start_cluster: int = START_CLUSTER,
             results = pool.map(crosscorr_group, tasks)
 
         for msg in results:
-            print("Worker =>", msg)
+            logging.info("Worker => %s", msg)
     else:
-        print("No cross-correlation tasks found!")
+        logging.warning("No cross-correlation tasks found!")
 
-    print("\nAll done. Check xcorr_output/cluster_* directories.")
+    logging.info("All done. Check xcorr_output/cluster_* directories.")
 
 if __name__ == "__main__":
     import argparse
@@ -468,8 +496,14 @@ if __name__ == "__main__":
         default=None,
         help="Number of worker processes to use",
     )
+    parser.add_argument(
+        "--log",
+        default="INFO",
+        help="Logging level (DEBUG, INFO, WARNING, ERROR)",
+    )
 
     args = parser.parse_args()
+    setup_logging(args.log)
     run_script(
         start_cluster=args.start_cluster,
         cc_threshold=args.cc_threshold,

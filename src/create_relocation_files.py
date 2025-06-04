@@ -58,6 +58,10 @@ NUM_CORES  = 8
 # If memory is tight, reduce this. Each chunk will hold CHUNK_SIZE waveforms max.
 CHUNK_SIZE = 200
 
+# Preprocessing parameters
+BANDPASS_LO = 2.0  # Hz
+BANDPASS_HI = 10.0  # Hz
+
 ###############################################################################
 # DBSCAN & Data-Loading Helpers
 ###############################################################################
@@ -193,21 +197,36 @@ def load_waveforms_for_arrivals(df):
     """
     st = Stream()
     for _, row in df.iterrows():
-        pattern = row['path']
+        pattern = row["path"]
         matches = glob.glob(pattern)
         if not matches:
             continue
         f = matches[0]
         try:
             wf = read(f)
-            wf.trim(row['artime_start'], row['artime_end'])
+            # initial window with buffer
+            wf.trim(row["artime_start"], row["artime_end"])
+            wf.filter(
+                "bandpass",
+                freqmin=BANDPASS_LO,
+                freqmax=BANDPASS_HI,
+                corners=4,
+                zerophase=True,
+            )
+            wf.detrend("demean")
+            wf.detrend("linear")
+            # final precise window after filtering
+            wf.trim(
+                row["artime"] - row["pretrig"],
+                row["artime"] + row["posttrig"],
+            )
             if len(wf) > 0:
                 tr = wf[0]
-                tr.stats.station = str(row['sta'])
-                tr.stats.channel = str(row['chan'])
-                tr.stats.phase   = str(row['phase'])
-                tr.stats.artime  = row['artime']
-                tr.stats.orid    = row['master_id']
+                tr.stats.station = str(row["sta"])
+                tr.stats.channel = str(row["chan"])
+                tr.stats.phase = str(row["phase"])
+                tr.stats.artime = row["artime"]
+                tr.stats.orid = row["master_id"]
                 st.append(tr)
         except Exception as e:
             print(f"Error reading {f}: {e}")
@@ -220,32 +239,42 @@ def xcorr_pairwise(stA, stB, max_lag=50, self_xcorr=False):
     """
     results = []
     if self_xcorr:
-        for i in range(len(stA)-1):
-            for j in range(i+1, len(stA)):
+        for i in range(len(stA) - 1):
+            for j in range(i + 1, len(stA)):
                 trA = stA[i]
                 trB = stA[j]
-                cc_array = xcorr.correlate(trA.data, trB.data, max_lag)
-                cc_max = cc_array[np.argmax(cc_array)]
+                cc = xcorr.correlate(trA.data, trB.data, max_lag)
+                norm = np.linalg.norm(trA.data) * np.linalg.norm(trB.data)
+                if norm != 0:
+                    cc /= norm
+                    cc_max = cc[np.argmax(np.abs(cc))]
+                else:
+                    cc_max = 0.0
                 results.append({
-                    "oridA":   trA.stats.orid,
-                    "oridB":   trB.stats.orid,
+                    "oridA": trA.stats.orid,
+                    "oridB": trB.stats.orid,
                     "station": trA.stats.station,
                     "channel": trA.stats.channel,
-                    "phase":   trA.stats.phase,
-                    "xcorr":   cc_max
+                    "phase": trA.stats.phase,
+                    "xcorr": cc_max,
                 })
     else:
         for trA in stA:
             for trB in stB:
-                cc_array = xcorr.correlate(trA.data, trB.data, max_lag)
-                cc_max = cc_array[np.argmax(cc_array)]
+                cc = xcorr.correlate(trA.data, trB.data, max_lag)
+                norm = np.linalg.norm(trA.data) * np.linalg.norm(trB.data)
+                if norm != 0:
+                    cc /= norm
+                    cc_max = cc[np.argmax(np.abs(cc))]
+                else:
+                    cc_max = 0.0
                 results.append({
-                    "oridA":   trA.stats.orid,
-                    "oridB":   trB.stats.orid,
+                    "oridA": trA.stats.orid,
+                    "oridB": trB.stats.orid,
                     "station": trA.stats.station,
                     "channel": trA.stats.channel,
-                    "phase":   trA.stats.phase,
-                    "xcorr":   cc_max
+                    "phase": trA.stats.phase,
+                    "xcorr": cc_max,
                 })
     return results
 

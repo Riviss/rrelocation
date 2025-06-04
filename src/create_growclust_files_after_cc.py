@@ -25,6 +25,8 @@ and in the cc (xcorr) files skips self-correlation (i.e. event id 1 = event id 1
 
 import os
 import sys
+import argparse
+import logging
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -37,6 +39,19 @@ from config import (
     EVENTS_CSV,
     STATIONS_CSV,
 )
+
+
+###############################################################################
+# Logging
+###############################################################################
+
+def setup_logging(level: str = "INFO") -> None:
+    """Configure root logging."""
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
 
 ###############################################################################
@@ -125,7 +140,9 @@ def write_evlist(df_events, cluster_id, outdir, master_mapping):
         for _, row in df_events.iterrows():
             master_id_str = row['master_id']
             if master_id_str not in master_mapping:
-                print(f"Warning: master_id {master_id_str} not in mapping. Skipping event.")
+                logging.warning(
+                    "master_id %s not in mapping. Skipping event.", master_id_str
+                )
                 skipped_events += 1
                 continue
             unique_id = master_mapping[master_id_str]
@@ -159,8 +176,8 @@ def write_evlist(df_events, cluster_id, outdir, master_mapping):
                     f"{unique_id:8d}\n")
             f.write(line)
     if skipped_events > 0:
-        print(f"  Skipped {skipped_events} events due to errors.")
-    print(f"  Wrote evlist.txt => {outpath}")
+        logging.info("  Skipped %d events due to errors.", skipped_events)
+    logging.info("  Wrote evlist.txt => %s", outpath)
 
 ###############################################################################
 # 2) CREATE stlist.txt
@@ -184,7 +201,7 @@ def write_stlist(df_stations, cluster_id, outdir):
             elv = row['elev']
             line = f"{station_name:<5s} {lat:8.4f} {lon:9.4f} {elv:6.1f}\n"
             f.write(line)
-    print(f"  Wrote stlist.txt => {outpath}")
+    logging.info("  Wrote stlist.txt => %s", outpath)
 
 ###############################################################################
 # 3) CREATE xcordata.txt
@@ -228,7 +245,11 @@ def write_xcordata(cluster_id, outdir, master_mapping, station_mapping):
 
             # Check if both events exist in the mapping
             if eventA_str not in master_mapping or eventB_str not in master_mapping:
-                print(f"Warning: Event(s) {eventA_str} or {eventB_str} not found in mapping. Skipping line.")
+                logging.warning(
+                    "Event(s) %s or %s not in mapping. Skipping line.",
+                    eventA_str,
+                    eventB_str,
+                )
                 continue
 
             idA = master_mapping[eventA_str]
@@ -278,7 +299,7 @@ def write_xcordata(cluster_id, outdir, master_mapping, station_mapping):
             for entry in pair_dict[(idA, idB)]:
                 mapped_sta, tdif, rxco, ph = entry
                 f.write(f"    {mapped_sta:<5s} {tdif:8.5f} {rxco:5.4f} {ph}\n")
-    print(f"  Wrote xcordata.txt => {outpath}")
+    logging.info("  Wrote xcordata.txt => %s", outpath)
 
 ###############################################################################
 # MAIN
@@ -291,10 +312,10 @@ def main():
     # Create mappings for events and stations
     master_mapping = create_masterid_map(df_events)
     station_mapping = create_station_mapping(df_stations)
-    print(f"Generated mapping for {len(master_mapping)} master ids.")
-    
+    logging.info("Generated mapping for %d master ids.", len(master_mapping))
+    logging.debug("Station dataframe:\n%s", df_stations)
+
     cluster_dirs = glob.glob(os.path.join(CLUSTER_ROOT, "cluster_*"))
-    print(df_stations)
 
     for cdir in cluster_dirs:
         basename = os.path.basename(cdir)
@@ -308,10 +329,14 @@ def main():
         if MIN_CLUSTER is not None and cid < MIN_CLUSTER:
             continue
 
-        print(f"\n=== Building GrowClust files for {cdir} (cluster {cid}) ===")
+        logging.info(
+            "=== Building GrowClust files for %s (cluster %d) ===",
+            cdir,
+            cid,
+        )
         dfc = df_events[df_events['cluster_id'] == cid].copy()
         if dfc.empty:
-            print(f"  No events found for cluster {cid}")
+            logging.warning("  No events found for cluster %d", cid)
             continue
 
         write_evlist(dfc, cid, cdir, master_mapping)
@@ -319,4 +344,14 @@ def main():
         write_xcordata(cid, cdir, master_mapping, station_mapping)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Create GrowClust input files from cross-correlation output"
+    )
+    parser.add_argument(
+        "--log",
+        default="INFO",
+        help="Logging level (DEBUG, INFO, WARNING, ERROR)",
+    )
+    args = parser.parse_args()
+    setup_logging(args.log)
     main()
